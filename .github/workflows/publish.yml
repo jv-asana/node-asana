@@ -1,0 +1,80 @@
+name: Bump Version and Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      bumpVersion:
+        description: Choose a version number to bump
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  bump-semantic-versioning:
+    name: Bump the semantic versioning for the package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "8.x"
+      - name: Install gulp
+        run: npm i gulp
+      - name: Run deploy script
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          gulp bump-${{ inputs.bumpVersion }}
+          git push --tags origin master:master
+  publish-to-github:
+    needs: bump-semantic-versioning
+    name: Publish to GitHub Releases
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: master
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "8.x"
+      - name: Get version tag
+        id: tag
+        run: echo "version=v$(cat VERSION)" >> $GITHUB_OUTPUT
+      - name: Print version tag
+        run: echo ${{ steps.tag.outputs.version }}
+      - name: Bundle the code, full version to asana.js and minified to asana-min.js
+        run: |
+          npm i gulp
+          gulp bundle
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.version }}
+          # Use the newest commit message as the release description
+          body: ${{ github.event.head_commit.message }}
+          files: |
+            dist/asana.js
+            dist/asana-min.js
+  build-n-publish-to-npmjs:
+    needs: [bump-semantic-versioning, publish-to-github]
+    name: Build and publish 📦 to npmjs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: master
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "8.x"
+          registry-url: "https://registry.npmjs.com"
+      - run: npm i
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
