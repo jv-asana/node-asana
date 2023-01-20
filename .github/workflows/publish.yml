@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: "8.x"
       - name: Install gulp
-        run: npm i gulp
+        run: npm i gulp --save-dev
       - name: Run deploy script
         run: |
           git config user.name github-actions
